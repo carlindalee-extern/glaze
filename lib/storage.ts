@@ -1,3 +1,4 @@
+import { getStore } from "@netlify/blobs";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import type { BrandKit } from "./firecrawl";
@@ -15,10 +16,19 @@ export type GeneratedPage = {
   copy: PageCopy;
 };
 
+// Use Netlify Blobs in production, local filesystem in dev.
+const useNetlifyBlobs = Boolean(
+  process.env.NETLIFY || process.env.NETLIFY_LOCAL || process.env.NETLIFY_DEV,
+);
+
 const DATA_DIR = path.join(process.cwd(), "data");
 const DATA_FILE = path.join(DATA_DIR, "pages.json");
 
-async function ensureFile() {
+function getBlobStore() {
+  return getStore({ name: "glaze-pages", consistency: "strong" });
+}
+
+async function ensureLocalFile() {
   await fs.mkdir(DATA_DIR, { recursive: true });
   try {
     await fs.access(DATA_FILE);
@@ -27,8 +37,8 @@ async function ensureFile() {
   }
 }
 
-async function readAll(): Promise<Record<string, GeneratedPage>> {
-  await ensureFile();
+async function readAllLocal(): Promise<Record<string, GeneratedPage>> {
+  await ensureLocalFile();
   const raw = await fs.readFile(DATA_FILE, "utf8");
   try {
     return JSON.parse(raw) as Record<string, GeneratedPage>;
@@ -37,24 +47,46 @@ async function readAll(): Promise<Record<string, GeneratedPage>> {
   }
 }
 
-async function writeAll(data: Record<string, GeneratedPage>) {
-  await ensureFile();
+async function writeAllLocal(data: Record<string, GeneratedPage>) {
+  await ensureLocalFile();
   await fs.writeFile(DATA_FILE, JSON.stringify(data, null, 2), "utf8");
 }
 
 export async function savePage(page: GeneratedPage) {
-  const all = await readAll();
+  if (useNetlifyBlobs) {
+    const store = getBlobStore();
+    await store.setJSON(page.slug, page);
+    return;
+  }
+  const all = await readAllLocal();
   all[page.slug] = page;
-  await writeAll(all);
+  await writeAllLocal(all);
 }
 
 export async function getPage(slug: string): Promise<GeneratedPage | null> {
-  const all = await readAll();
+  if (useNetlifyBlobs) {
+    const store = getBlobStore();
+    const data = (await store.get(slug, { type: "json" })) as
+      | GeneratedPage
+      | null;
+    return data ?? null;
+  }
+  const all = await readAllLocal();
   return all[slug] ?? null;
 }
 
 export async function listPages(): Promise<GeneratedPage[]> {
-  const all = await readAll();
+  if (useNetlifyBlobs) {
+    const store = getBlobStore();
+    const { blobs } = await store.list();
+    const pages = await Promise.all(
+      blobs.map(async (b) => (await store.get(b.key, { type: "json" })) as GeneratedPage),
+    );
+    return pages
+      .filter(Boolean)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+  const all = await readAllLocal();
   return Object.values(all).sort((a, b) =>
     b.createdAt.localeCompare(a.createdAt),
   );

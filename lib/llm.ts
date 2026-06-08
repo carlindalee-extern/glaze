@@ -54,7 +54,7 @@ export async function generateCopy(
       responseMimeType: "application/json",
       responseSchema,
       temperature: 0.6,
-      maxOutputTokens: 2048,
+      maxOutputTokens: 4096,
     },
   });
 
