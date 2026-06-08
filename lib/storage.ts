@@ -16,15 +16,18 @@ export type GeneratedPage = {
   copy: PageCopy;
 };
 
-// Use Netlify Blobs in production, local filesystem in dev.
-// Evaluated at runtime, not module load, so esbuild can't inline a stale value.
+// Use Netlify Blobs whenever the filesystem isn't writable (Lambda, Edge).
+// Indirect env-var read prevents esbuild from inlining at build time.
 function useNetlifyBlobs(): boolean {
-  if (process.env.NODE_ENV === "production") return true;
-  return Boolean(
-    process.env.NETLIFY ||
-      process.env.NETLIFY_LOCAL ||
-      process.env.NETLIFY_DEV,
-  );
+  const env = process["env" as keyof typeof process] as Record<
+    string,
+    string | undefined
+  >;
+  if (env.LAMBDA_TASK_ROOT) return true;
+  if (env.NETLIFY === "true" || env.NETLIFY_LOCAL || env.NETLIFY_DEV)
+    return true;
+  if (env.NODE_ENV === "production") return true;
+  return false;
 }
 
 const DATA_DIR = path.join(process.cwd(), "data");
