@@ -1,0 +1,9 @@
+node_modules
+.next
+.env*.local
+.netlify
+.DS_Store
+data/pages.json
+*.log
+.vercel
+.env*
