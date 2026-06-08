@@ -7,6 +7,10 @@
 
 [functions]
   node_bundler = "esbuild"
+  included_files = ["public/headshots/**"]
 
-[functions."generate"]
+[functions."___netlify-server-handler"]
+  timeout = 60
+
+[functions."api/generate"]
   timeout = 60
