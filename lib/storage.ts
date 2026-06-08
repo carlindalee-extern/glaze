@@ -17,9 +17,15 @@ export type GeneratedPage = {
 };
 
 // Use Netlify Blobs in production, local filesystem in dev.
-const useNetlifyBlobs = Boolean(
-  process.env.NETLIFY || process.env.NETLIFY_LOCAL || process.env.NETLIFY_DEV,
-);
+// Evaluated at runtime, not module load, so esbuild can't inline a stale value.
+function useNetlifyBlobs(): boolean {
+  if (process.env.NODE_ENV === "production") return true;
+  return Boolean(
+    process.env.NETLIFY ||
+      process.env.NETLIFY_LOCAL ||
+      process.env.NETLIFY_DEV,
+  );
+}
 
 const DATA_DIR = path.join(process.cwd(), "data");
 const DATA_FILE = path.join(DATA_DIR, "pages.json");
@@ -53,7 +59,7 @@ async function writeAllLocal(data: Record<string, GeneratedPage>) {
 }
 
 export async function savePage(page: GeneratedPage) {
-  if (useNetlifyBlobs) {
+  if (useNetlifyBlobs()) {
     const store = getBlobStore();
     await store.setJSON(page.slug, page);
     return;
@@ -64,7 +70,7 @@ export async function savePage(page: GeneratedPage) {
 }
 
 export async function getPage(slug: string): Promise<GeneratedPage | null> {
-  if (useNetlifyBlobs) {
+  if (useNetlifyBlobs()) {
     const store = getBlobStore();
     const data = (await store.get(slug, { type: "json" })) as
       | GeneratedPage
@@ -76,7 +82,7 @@ export async function getPage(slug: string): Promise<GeneratedPage | null> {
 }
 
 export async function listPages(): Promise<GeneratedPage[]> {
-  if (useNetlifyBlobs) {
+  if (useNetlifyBlobs()) {
     const store = getBlobStore();
     const { blobs } = await store.list();
     const pages = await Promise.all(
